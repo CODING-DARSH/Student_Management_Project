@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Register</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { 
+      background: linear-gradient(to bottom right, #0f0f0f, #2c2c2c); 
+      color: #f1f1f1; 
+      font-family: 'Inter', sans-serif; 
+      overflow-x: hidden;
+    }
+    .card { background-color: #1b1b1b; }
+    .input-dark { background-color: #2a2a2a; border: 1px solid #3d3d3d; color: #f5f5f5; }
+    .btn-dark { background-color: #3d3d3d; }
+    .btn-dark:hover { background-color: #5a5a5a; }
+
+    @keyframes fadeInUp {
+      0% { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in-up {
+      animation: fadeInUp 0.6s ease-out forwards;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+  <!-- Registration Card -->
+  <div id="registerCard" class="card p-8 rounded-lg shadow w-[380px] fade-in-up">
+    <h2 class="text-2xl font-semibold text-center mb-6">🧑‍🏫 Teacher Registration</h2>
+    <form id="teacherForm" method="POST" action="/teacher/register" class="space-y-4">
+      <input type="text" name="name" placeholder="Full Name" required
+             class="w-full input-dark rounded-md px-3 py-2 focus:ring-2 focus:ring-gray-400 focus:outline-none">
+      <input type="password" name="password" placeholder="Password" required
+             class="w-full input-dark rounded-md px-3 py-2 focus:ring-2 focus:ring-gray-400 focus:outline-none">
+      <button type="submit"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md font-medium transition">
+        Register
+      </button>
+    </form>
+
+    <p class="text-center text-sm mt-4 text-gray-400">
+      Already a teacher? <a href="/" class="text-gray-200 hover:underline">Login</a>
+    </p>
+  </div>
+
+  <!-- Success Animation -->
+  <div id="successCard" class="hidden flex flex-col items-center justify-center fade-in-up">
+    <div class="bg-green-600 w-16 h-16 rounded-full flex items-center justify-center mb-4 shadow-lg animate-bounce">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+      </svg>
+    </div>
+    <h2 class="text-2xl font-semibold text-green-500 mb-2">Registration Successful!</h2>
+    <p class="text-gray-400 text-sm mb-6">Redirecting to your dashboard...</p>
+  </div>
+
+  <script>
+    const form = document.getElementById('teacherForm');
+    const registerCard = document.getElementById('registerCard');
+    const successCard = document.getElementById('successCard');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      
+      const res = await fetch('/teacher/register', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (res.ok) {
+        // hide form and show success animation
+        registerCard.classList.add('hidden');
+        successCard.classList.remove('hidden');
+
+        // redirect after delay
+        setTimeout(() => {
+          window.location.href = "/teacher/dashboard";  // change destination if you want
+        }, 2500);
+      } else {
+        alert("Registration failed. Try again.");
+      }
+    });
+  </script>
+
+</body>
+</html>

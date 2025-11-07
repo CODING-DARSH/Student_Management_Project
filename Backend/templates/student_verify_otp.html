@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify OTP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(to bottom right, #0f0f0f, #2c2c2c);
+      color: #f1f1f1;
+      font-family: 'Inter', sans-serif;
+    }
+    .card { background-color: #1b1b1b; }
+    .input-dark { background-color: #2a2a2a; border: 1px solid #3d3d3d; color: #f5f5f5; }
+    .btn-dark { background-color: #3d3d3d; }
+    .btn-dark:hover { background-color: #5a5a5a; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.8s ease forwards;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+  <div class="card shadow-xl rounded-xl p-8 w-[380px]">
+    <h2 class="text-2xl font-semibold text-center mb-6">🔐 Verify OTP</h2>
+
+    {% if message %}
+      <div class="mb-4 text-green-500 bg-green-900/30 border border-green-600 rounded-md px-4 py-2 text-center animate-fade-in">
+        {{ message }}
+      </div>
+    {% endif %}
+
+    <form method="POST" action="/student/verify-otp" class="space-y-4">
+      <input type="hidden" name="id" value="{{ student_id }}">
+      <input type="text" name="otp" placeholder="Enter the OTP you received" required
+             class="w-full input-dark rounded-md px-3 py-2 focus:ring-2 focus:ring-gray-400 focus:outline-none">
+      <button type="submit"
+              class="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium transition">Verify OTP</button>
+    </form>
+
+    <p class="text-center text-sm mt-4 text-gray-400">
+      Didn’t receive it? <a href="/" class="text-gray-200 hover:underline">Resend</a>
+    </p>
+  </div>
+
+  <script>
+    const msg = document.querySelector('div.text-green-500');
+    if (msg) {
+      msg.style.opacity = 0;
+      setTimeout(() => { msg.style.transition = 'opacity 1s'; msg.style.opacity = 1; }, 100);
+    }
+  </script>
+</body>
+</html>

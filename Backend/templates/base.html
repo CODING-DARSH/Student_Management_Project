@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Dashboard{% endblock %}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="{{ url_for('static', filename='js/toast.js') }}" defer></script>
+  <style>
+    body { background-color: #0f0f0f; color: #f1f1f1; font-family: 'Inter', sans-serif; }
+    .card { background-color: #1b1b1b; }
+    .input-dark { background-color: #2a2a2a; border: 1px solid #3d3d3d; color: #fff; }
+    .input-dark::placeholder { color: #a1a1a1; }
+    .btn-dark { background-color: #3d3d3d; }
+    .btn-dark:hover { background-color: #555; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Navbar -->
+  <nav class="flex items-center justify-between px-8 py-4 bg-black shadow-lg sticky top-0 z-50">
+    <div class="flex items-center space-x-3">
+      <span class="text-2xl font-semibold text-white">Smart<span class="text-gray-400">Edu</span></span>
+    </div>
+    <div class="flex space-x-8 text-gray-300">
+      {% if session.get('student_id') %}
+        <a href="/student/dashboard" class="hover:text-white transition">Student Dashboard</a>
+      {% elif session.get('admin') %}
+        <a href="/admin/dashboard" class="hover:text-white transition">Admin Panel</a>
+      {% else %}
+        <a href="/" class="hover:text-white transition">Login</a>
+      {% endif %}
+      
+    </div>
+  </nav>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2"></div>
+
+  <!-- Main Body -->
+  <main class="flex-1 p-8 animate-fadeIn">
+    {% block content %}{% endblock %}
+  </main>
+
+</body>
+</html>

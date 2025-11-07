@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard{% endblock %}
+{% block content %}
+
+<!-- Navbar -->
+<nav class="flex justify-between items-center bg-[#111] border-b border-[#2a2a2a] px-8 py-4 shadow-lg">
+  <h1 class="text-xl font-semibold text-white flex items-center gap-2">
+    <i class="fa-solid fa-user-graduate text-gray-400"></i> Student Dashboard
+  </h1>
+  <form action="/logout" method="POST" onsubmit="return confirm('Logout?')">
+    <button class="bg-[#2a2a2a] hover:bg-[#3a3a3a] text-white px-4 py-2 rounded-md text-sm flex items-center gap-2">
+      <i class="fa-solid fa-sign-out-alt"></i> Logout
+    </button>
+  </form>
+</nav>
+
+<!-- Content Grid -->
+<main class="p-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+  <!-- Profile -->
+  <div class="bg-[#1b1b1b] p-6 rounded-xl border border-[#2c2c2c] shadow-lg">
+    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+      <i class="fa-solid fa-id-card text-gray-400"></i> Profile
+    </h2>
+    <div class="space-y-2 text-gray-300">
+      <p><strong>Name:</strong> {{ student[1] }}</p>
+      <p><strong>ID:</strong> {{ student[0] }}</p>
+      <p><strong>Grade:</strong> {{ student[2] or 'Not Assigned' }}</p>
+    </div>
+    <div class="mt-6 flex flex-col items-center">
+      <img src="https://cdn-icons-png.flaticon.com/512/1077/1077012.png"
+           class="w-20 h-20 rounded-full border border-gray-600 shadow-md">
+      <p class="text-gray-500 text-sm mt-2 italic">"Learning never exhausts the mind."</p>
+    </div>
+  </div>
+
+  <!-- Enrolled Courses -->
+  <div class="bg-[#1b1b1b] p-6 rounded-xl border border-[#2c2c2c] shadow-lg lg:col-span-2">
+    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+      <i class="fa-solid fa-book text-gray-400"></i> Enrolled Courses
+    </h2>
+    {% if courses %}
+    <ul class="grid md:grid-cols-2 gap-3">
+      {% for c in courses %}
+      <li class="bg-[#222] border border-[#333] p-3 rounded-md flex justify-between items-center hover:bg-[#2a2a2a] transition">
+        <span>{{ c }}</span>
+        <span class="text-gray-500 text-sm">Active</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-gray-500 italic">No enrolled courses yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Enroll in New Course -->
+  <div class="bg-[#1b1b1b] p-6 rounded-xl border border-[#2c2c2c] shadow-lg">
+    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+      <i class="fa-solid fa-pen-to-square text-gray-400"></i> Enroll in a Course
+    </h2>
+    <form method="POST" action="/student/enroll">
+      <input type="text" name="course_id" placeholder="Course ID"
+             class="w-full bg-[#222] border border-[#333] text-white px-3 py-2 rounded-md focus:ring-2 focus:ring-gray-500 mb-4"
+             required>
+      <button class="w-full bg-[#2a2a2a] hover:bg-[#3a3a3a] text-white py-2 rounded-md font-medium">Enroll</button>
+    </form>
+  </div>
+
+  <!-- Assignments (Merged + Enhanced Section) -->
+  <div class="bg-[#1b1b1b] p-6 rounded-xl border border-[#2c2c2c] shadow-lg col-span-2">
+    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+      <i class="fa-solid fa-folder-open text-gray-400"></i> Assignments
+    </h2>
+
+    {% if assignments %}
+    <table class="w-full text-left text-gray-300">
+      <thead class="text-gray-400 border-b border-gray-700">
+        <tr>
+          <th class="pb-2">Title</th>
+          <th class="pb-2">Due Date</th>
+          <th class="pb-2">Submission</th>
+          <th class="pb-2">Marks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in assignments %}
+        <tr class="border-b border-gray-800 hover:bg-[#222] transition">
+          <td class="py-2">{{ a[1] }}</td>
+          <td>{{ a[2] }}</td>
+          <td>
+            {% if a[3] %}
+              <div class="flex items-center gap-2">
+                <a href="/{{ a[3] }}" class="text-blue-400 hover:text-blue-300 text-sm">📎 Download</a>
+                <form method="POST" action="/student/upload" enctype="multipart/form-data" class="flex items-center gap-2">
+                  <input type="hidden" name="assignment_id" value="{{ a[0] }}">
+                  <input type="file" name="file" class="text-gray-400 text-xs w-32">
+                  <button type="submit" class="text-gray-300 hover:text-white text-sm">↻ Update</button>
+                </form>
+              </div>
+            {% else %}
+              <form method="POST" action="/student/upload" enctype="multipart/form-data" class="flex items-center gap-2">
+                <input type="hidden" name="assignment_id" value="{{ a[0] }}">
+                <input type="file" name="file" class="text-gray-400 text-xs w-32">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm">Submit</button>
+              </form>
+            {% endif %}
+          </td>
+          <td>
+            {% if a[4] %}
+              <span class="text-green-400 font-medium">{{ a[4] }}</span>
+            {% elif a[3] %}
+              <span class="text-yellow-400 text-sm">Submitted</span>
+            {% else %}
+              <span class="text-gray-500 text-sm">Not submitted</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="text-gray-500">No assignments yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Performance Chart -->
+  <div class="bg-[#1b1b1b] p-6 rounded-xl border border-[#2c2c2c] shadow-lg lg:col-span-2">
+    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+      <i class="fa-solid fa-chart-line text-gray-400"></i> Performance Overview
+    </h2>
+    <canvas id="gradeChart" height="100"></canvas>
+  </div>
+
+  <!-- Course Averages -->
+  <div class="bg-[#1b1b1b] p-6 rounded-xl border border-[#2c2c2c] shadow-lg col-span-2">
+    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+      <i class="fa-solid fa-chart-bar text-gray-400"></i> Course Averages
+    </h2>
+    {% if chart_labels %}
+      <table class="w-full text-left text-gray-300">
+        <thead class="text-gray-400 border-b border-gray-700">
+          <tr>
+            <th class="pb-2">Course</th>
+            <th class="pb-2">Average Marks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for label, value in chart_labels|zip(chart_data) %}
+          <tr class="border-b border-gray-800 hover:bg-[#2a2a2a] transition">
+            <td class="py-2">{{ label }}</td>
+            <td>{{ value }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="text-gray-500">No graded courses yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Notifications -->
+  <div class="bg-[#1b1b1b] p-6 rounded-xl border border-[#2c2c2c] shadow-lg">
+    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+      <i class="fa-solid fa-bell text-gray-400"></i> Notifications
+    </h2>
+    {% if notifications %}
+      <div class="space-y-2 max-h-64 overflow-y-auto">
+        {% for n in notifications %}
+        <div class="bg-[#222] border border-[#333] p-3 rounded-md">
+          <p>{{ n[0] }}</p>
+          <small class="text-gray-500">{{ n[1] }}</small>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-gray-500 italic">No new notifications.</p>
+    {% endif %}
+  </div>
+
+</main>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const chartLabels = JSON.parse('{{ chart_labels | tojson | safe }}');
+const chartData = JSON.parse('{{ chart_data | tojson | safe }}');
+
+new Chart(document.getElementById('gradeChart'), {
+  type: 'bar',
+  data: {
+    labels: chartLabels,
+    datasets: [{
+      label: 'Marks',
+      data: chartData,
+      backgroundColor: ['#333', '#555', '#777', '#999'],
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { color: '#f5f5f5' },
+        grid: { color: '#2a2a2a' }
+      },
+      x: {
+        ticks: { color: '#f5f5f5' },
+        grid: { display: false }
+      }
+    }
+  }
+});
+</script>
+
+{% endblock %}

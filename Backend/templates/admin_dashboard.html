@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+    <title>Document</title>
+</head>
+<body>
+
+<div class="max-w-5xl mx-auto mt-12 bg-white shadow-lg rounded-lg p-8">
+  <h2 class="text-3xl font-semibold text-red-600 mb-6">Admin Dashboard</h2>
+  <h3 class="text-xl mb-4 font-semibold">Registered Students</h3>
+  <table class="min-w-full border border-gray-300 rounded-lg">
+    <thead class="bg-gray-100">
+      <tr>
+        <th class="py-2 px-4 text-left">ID</th>
+        <th class="py-2 px-4 text-left">Name</th>
+        <th class="py-2 px-4 text-left">Grades</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in students %}
+      <tr class="hover:bg-gray-50">
+        <td class="py-2 px-4">{{ s[0] }}</td>
+        <td class="py-2 px-4">{{ s[1] }}</td>
+        <td class="py-2 px-4">{{ s[2] or 'N/A' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

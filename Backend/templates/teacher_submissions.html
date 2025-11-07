@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Assignment Submissions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://unpkg.com/lucide-static@latest/font/lucide.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(to bottom right, #0f0f0f, #2a2a2a);
+      color: #e5e5e5;
+      font-family: 'Inter', sans-serif;
+    }
+    .glass {
+      background: rgba(30, 30, 30, 0.7);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(80, 80, 80, 0.3);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .btn {
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      opacity: 0.9;
+    }
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+    }
+    .badge-pending {
+      background: rgba(100, 100, 100, 0.2);
+      color: #bfbfbf;
+    }
+    .badge-graded {
+      background: rgba(255, 255, 255, 0.1);
+      color: #f1f1f1;
+      border: 1px solid #444;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-[#1a1a1a] text-white px-8 py-6 shadow-md flex justify-between items-center">
+    <div>
+      <h1 class="text-2xl font-semibold tracking-wide">📘 Assignment Submissions</h1>
+      <p class="text-gray-400 text-sm">For {{ assignment[0] if assignment else 'Assignment' }}</p>
+    </div>
+    <a href="/teacher/dashboard"
+       class="text-gray-300 border border-gray-600 hover:bg-gray-700 px-4 py-2 rounded-md text-sm transition">
+       ⬅ Back to Dashboard
+    </a>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 p-10 space-y-8">
+
+    {% if submissions %}
+    <div class="glass rounded-xl p-6">
+      <table class="w-full border-collapse text-left">
+        <thead class="border-b border-gray-700 text-gray-400 text-sm">
+          <tr>
+            <th class="pb-3 px-4">Student</th>
+            <th class="pb-3 px-4">File</th>
+            <th class="pb-3 px-4">Submitted At</th>
+            <th class="pb-3 px-4">Marks</th>
+            <th class="pb-3 px-4">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in submissions %}
+          <tr class="border-b border-gray-800 hover:bg-[#2a2a2a] transition">
+            <td class="py-3 px-4 font-medium text-gray-200">{{ s[1] }}</td>
+            <td class="py-3 px-4">
+              <a href="/uploads/{{ s[2] }}" class="text-gray-300 hover:text-white flex items-center gap-2">
+                <i class="lucide-paperclip text-xs"></i> Download
+              </a>
+            </td>
+            <td class="py-3 px-4 text-gray-400">{{ s[3] or '—' }}</td>
+            <td class="py-3 px-4">
+              {% if s[4] %}
+                <span class="badge badge-graded">Graded: {{ s[4] }}</span>
+              {% else %}
+                <span class="badge badge-pending">Pending</span>
+              {% endif %}
+            </td>
+            <td class="py-3 px-4">
+              <form method="POST" action="/teacher/grade_submission" class="flex items-center gap-2">
+                <input type="hidden" name="submission_id" value="{{ s[0] }}">
+                <input type="number" name="marks" placeholder="Marks" value="{{ s[4] or '' }}" 
+                       class="bg-[#1e1e1e] text-white px-2 py-1 rounded-md border border-gray-600 w-20 focus:ring-2 focus:ring-gray-500 focus:outline-none">
+                <button type="submit"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm border border-gray-600">
+                  Assign
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="glass text-center py-20 rounded-xl">
+      <p class="text-gray-400 text-lg">No submissions yet for this assignment 💤</p>
+    </div>
+    {% endif %}
+
+  </main>
+
+  <footer class="text-center py-5 text-gray-500 text-sm border-t border-[#2c2c2c] bg-[#1a1a1a]">
+    Submission_Dashboard
+  </footer>
+
+</body>
+</html>
