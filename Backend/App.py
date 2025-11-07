@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, session, jsonify
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from models import Student, Teacher, Admin, OTP, send_email_otp, send_sms_otp, Assignment, Submission,Notification
+from models import Student, Teacher, Admin, OTP, send_email_otp, send_sms_otp, Assignment, Submission,Notification,TeacherNotification
 from db import execute_query
 from datetime import datetime
 from flask import send_from_directory, request, redirect, url_for, flash
@@ -59,53 +59,59 @@ def student_login():
 # ---------------- STUDENT REQUEST OTP ----------------
 @app.route('/student/request-otp', methods=['POST'])
 def request_otp():
-    student_id = request.form['id']
+    print(">>> /student/request-otp called")                 # <- log entry
+    student_id = request.form.get('id')
     form_email = request.form.get('email')
     form_phone = request.form.get('phone')
+    print("form data:", {"id": student_id, "email": form_email, "phone": form_phone})
 
-    otp = OTP.generate_otp(student_id)
+    if not student_id:
+        print("❌ No student_id provided in request")
+        return "Missing student id", 400
 
-    # ✅ send OTP using available contact info
-    if form_email:
-        send_email_otp(form_email, otp)
-    elif form_phone:
-        try:
+    try:
+        otp = OTP.generate_otp(student_id)
+        print(f"OTP generated: {otp} for student {student_id}")
+    except Exception as e:
+        print("❌ Error generating OTP:", repr(e))
+        return "Server error generating OTP", 500
+
+    # Try sending via provided contact first
+    try:
+        if form_email:
+            print("Attempting send_email_otp()")
+            send_email_otp(form_email, otp)
+        elif form_phone:
+            print("Attempting send_sms_otp()")
             send_sms_otp(form_phone, otp)
-        except Exception as e:
-            print(f"❌ SMS send failed, falling back to email (if exists): {e}")
-            if form_email:
-                send_email_otp(form_email, otp)
-            else:
-                print("📱 SMS skipped (no Twilio number). Sent via email only.")
-    else:
-        # fallback to whatever is in DB
-        q = "SELECT email, phone FROM Students WHERE id=:1"
-        data = execute_query(q, (student_id,), fetch=True)
-        if not data:
-            return "Student not found", 404
-        email, phone = data[0]
-
-        if email:
-            send_email_otp(email, otp)
-        elif phone:
-            try:
-                send_sms_otp(phone, otp)
-            except Exception as e:
-                print(f"❌ SMS send failed, fallback to email if possible: {e}")
-                if email:
-                    send_email_otp(email, otp)
-                else:
-                    print("📱 SMS skipped (no Twilio number). Sent via email only.")
         else:
-            return "No email or phone number on record."
+            print("No contact provided in form — falling back to DB lookup")
+            q = "SELECT email, phone FROM Students WHERE id=:1"
+            data = execute_query(q, (student_id,), fetch=True)
+            print("DB lookup result:", data)
+            if not data:
+                return "Student not found", 404
+            email, phone = data[0]
+            if email:
+                print("Found email in DB:", email)
+                send_email_otp(email, otp)
+            elif phone:
+                print("Found phone in DB:", phone)
+                send_sms_otp(phone, otp)
+            else:
+                print("No contact on record")
+                return "No email or phone number on record.", 400
+    except Exception as e:
+        print("❌ Error while sending OTP:", repr(e))
+        # still show user a friendly message
+        return "Failed to send OTP (check server logs).", 500
 
-    # after sending, redirect or render OTP entry form
-    # ✅ show OTP entry form now with message
+    print("✅ OTP send attempt finished — rendering verify page")
     return render_template(
-    "student_verify_otp.html",
-    student_id=student_id,
-    message="✅ OTP sent successfully! Please check your email or phone."
-)
+        "student_verify_otp.html",
+        student_id=student_id,
+        message="✅ OTP sent (or printed). Check email/phone or server logs."
+    )
 
 
 # ---------------- STUDENT VERIFY OTP ----------------
@@ -267,6 +273,7 @@ def teacher_register():
         return f"✅ Registration successful! Your Teacher ID is <b>{teacher_id}</b>. <a href='/'>Login</a>"
     return render_template('teacher_register.html')
 
+
 @app.route('/teacher/dashboard')
 def teacher_dashboard():
     if 'teacher_id' not in session:
@@ -274,7 +281,7 @@ def teacher_dashboard():
 
     teacher_id = session['teacher_id']
 
-    # Fetch teacher details
+    # ✅ Fetch teacher details
     teacher = execute_query(
         "SELECT id, name FROM Teachers WHERE id=:1",
         (teacher_id,),
@@ -282,41 +289,52 @@ def teacher_dashboard():
     )
     teacher = teacher[0] if teacher else None
 
-    # Get teacher’s students
-    q = """
+    # ✅ Fetch teacher’s students
+    students = execute_query("""
         SELECT s.id, s.name, c.course_name, c.id
         FROM Students s
         JOIN StudentCourses sc ON s.id = sc.student_id
         JOIN Courses c ON sc.course_id = c.id
         JOIN TeacherCourses tc ON c.id = tc.course_id
         WHERE tc.teacher_id = :1
-    """
-    students = execute_query(q, (teacher_id,), fetch=True)
+    """, (teacher_id,), fetch=True)
 
-    # Fetch teacher's assigned courses
+    # ✅ Fetch teacher’s assigned courses
     courses = Teacher.get_courses(teacher_id)
 
-    # Fetch assignments
-    assignments = execute_query(
-        "SELECT id, title, due_date FROM Assignments WHERE teacher_id=:1",
-        (teacher_id,),
-        fetch=True
-    )
+    # ✅ Fetch teacher’s assignments
+    assignments = execute_query("""
+        SELECT id, title, due_date
+        FROM Assignments
+        WHERE teacher_id = :1
+        ORDER BY due_date DESC
+    """, (teacher_id,), fetch=True)
 
-    # Fetch posts
-    posts = execute_query(
-        "SELECT content, created_at FROM TeacherPosts WHERE teacher_id=:1 ORDER BY created_at DESC",
-        (teacher_id,),
-        fetch=True
-    )
+    # ✅ Fetch teacher posts (if any)
+    posts = execute_query("""
+        SELECT content, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI')
+        FROM TeacherPosts
+        WHERE teacher_id = :1
+        ORDER BY created_at DESC
+    """, (teacher_id,), fetch=True)
 
+    # ✅ Fetch teacher notifications (new feature)
+    notifications = execute_query("""
+        SELECT message, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI')
+        FROM TeacherNotifications
+        WHERE teacher_id = :1
+        ORDER BY created_at DESC
+    """, (teacher_id,), fetch=True)
+
+    # ✅ Render everything to teacher dashboard
     return render_template(
         'teacher_dashboard.html',
-        teacher=teacher,   # ✅ added this line
+        teacher=teacher,
         students=students,
         courses=courses,
         assignments=assignments,
-        posts=posts
+        posts=posts,
+        notifications=notifications
     )
 
 
@@ -476,6 +494,9 @@ def grade_submission():
 
     return redirect(request.referrer or '/teacher/dashboard')
 
+print("✅ Registered routes:")
+for rule in app.url_map.iter_rules():
+    print(rule)
 
 
 # ---------------- MAIN ----------------
