@@ -216,6 +216,23 @@
   </div>
 
 </main>
+<div class="bg-[#1b1b1b] p-6 rounded-xl border border-[#2c2c2c] shadow-lg">
+  <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+    <i class="fa-solid fa-bell text-gray-400"></i> Notifications
+  </h2>
+  {% if notifications %}
+    <div class="space-y-2 max-h-64 overflow-y-auto">
+      {% for n in notifications %}
+      <div class="bg-[#222] border border-[#333] p-3 rounded-md">
+        <p>{{ n[0] }}</p>
+        <small class="text-gray-500">{{ n[1] }}</small>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-gray-500 italic">No new notifications.</p>
+  {% endif %}
+</div>
 
 </body>
 </html>
