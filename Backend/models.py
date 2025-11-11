@@ -12,7 +12,6 @@ load_dotenv()
 
 # ---------------- OTP / EMAIL / SMS UTILITIES ----------------
 def send_email_otp(email, otp):
-    """Send OTP via Gmail (uses env vars EMAIL_ADDR and EMAIL_APP_PASSWORD)."""
     sender = os.getenv("EMAIL_ADDR") or "yourapp@gmail.com"
     app_password = os.getenv("EMAIL_APP_PASSWORD")
 
@@ -34,9 +33,7 @@ def send_email_otp(email, otp):
     except Exception as e:
         print(f"❌ Email send error: {e}")
 
-
 def send_sms_otp(phone, otp):
-    """Send OTP via Twilio (prints in dev mode if Twilio not configured)."""
     sid = os.getenv("TWILIO_SID")
     token = os.getenv("TWILIO_AUTH_TOKEN")
     from_number = os.getenv("TWILIO_PHONE_NUMBER")
@@ -136,17 +133,22 @@ class Student:
         """
         return execute_query(q, (student_id,), fetch=True)
 
+
+# ---------------- TEACHER NOTIFICATIONS ----------------
 class TeacherNotification:
     @staticmethod
     def create(teacher_id, message):
-        q = "INSERT INTO TeacherNotifications (id, teacher_id, message) VALUES (teacher_notif_seq.NEXTVAL, :1, :2)"
-        execute_query(q, (teacher_id, message))
+        next_id = execute_query("SELECT NVL(MAX(id),0)+1 FROM TeacherNotifications", fetch=True)[0][0]
+        execute_query(
+            "INSERT INTO TeacherNotifications (id, teacher_id, message) VALUES (:1, :2, :3)",
+            (next_id, teacher_id, message)
+        )
 
-# ---------------- NOTIFICATION MODEL ----------------
+
+# ---------------- NOTIFICATIONS MODEL ----------------
 class Notification:
     @staticmethod
     def create(student_id, message):
-        """Create a new notification for a student."""
         q = """
         INSERT INTO Notifications (id, student_id, message, created_at)
         VALUES (notif_seq.NEXTVAL, :1, :2, SYSTIMESTAMP)
@@ -173,11 +175,9 @@ class Teacher:
         execute_query("INSERT INTO Teachers (id, name, password) VALUES (:1,:2,:3)", (next_id, name, password))
         print(f"✅ Teacher registered with ID: {next_id}")
         return next_id
+
     @staticmethod
     def get_courses(teacher_id):
-        """
-        Return list of (course_id, course_name) for courses this teacher is assigned to.
-        """
         q = """SELECT c.id, c.course_name
                FROM Courses c
                JOIN TeacherCourses tc ON c.id = tc.course_id
@@ -192,7 +192,6 @@ class Teacher:
 
     @staticmethod
     def grade_submission(submission_id, marks):
-        """Grade a submission, update averages, and notify student."""
         execute_query("UPDATE Submissions SET marks=:1 WHERE id=:2", (marks, submission_id))
         data = execute_query("""
             SELECT s.student_id, a.course_id
@@ -205,8 +204,6 @@ class Teacher:
             return
 
         student_id, course_id = data[0]
-
-        # Update average marks in StudentCourses
         execute_query("""
             UPDATE StudentCourses
             SET marks = (
@@ -217,7 +214,6 @@ class Teacher:
             )
             WHERE student_id=:1 AND course_id=:2
         """, (student_id, course_id))
-
         Notification.create(student_id, f"✅ Your submission for Course {course_id} has been graded. Marks: {marks}")
 
     @staticmethod
@@ -275,11 +271,9 @@ class Assignment:
             VALUES (:1,:2,:3,:4,:5,:6)
         """, (next_id, course_id, teacher_id, title, description, due_date))
 
-        # Notify all students in this course
         students = execute_query("SELECT student_id FROM StudentCourses WHERE course_id=:1", (course_id,), fetch=True)
         for sid, in students:
             Notification.create(sid, f"🆕 New assignment posted: {title} (Due: {due_date})")
-
         print(f"✅ Assignment {next_id} created for Course {course_id}")
         return next_id
 
@@ -311,3 +305,53 @@ class Submission:
         WHERE s.student_id = :1
         """
         return execute_query(q, (student_id,), fetch=True)
+
+
+# ---------------- ATTENDANCE MODEL ----------------
+class AttendanceModel:
+    @staticmethod
+    def mark_attendance_bulk(course_id, date_str, attendance_list):
+        for rec in attendance_list:
+            sid = rec['student_id']
+            present = 1 if rec.get('present') else 0
+            exists = execute_query(
+                "SELECT id FROM Attendance WHERE student_id=:1 AND course_id=:2 AND TRUNC(date_marked)=TO_DATE(:3,'YYYY-MM-DD')",
+                (sid, course_id, date_str),
+                fetch=True
+            )
+            if exists:
+                execute_query(
+                    "UPDATE Attendance SET present=:1, created_at=SYSTIMESTAMP WHERE id=:2",
+                    (present, exists[0][0])
+                )
+            else:
+                next_id = execute_query("SELECT NVL(MAX(id),0)+1 FROM Attendance", fetch=True)[0][0]
+                execute_query(
+                    "INSERT INTO Attendance (id, student_id, course_id, date_marked, present) VALUES (:1,:2,:3,TO_DATE(:4,'YYYY-MM-DD'),:5)",
+                    (next_id, sid, course_id, date_str, present)
+                )
+
+    @staticmethod
+    def get_attendance_percentage(student_id, course_id, lookback_days=180):
+        data = execute_query("""
+            SELECT SUM(present), COUNT(*)
+            FROM Attendance
+            WHERE student_id=:1 AND course_id=:2 AND date_marked >= (SYSDATE - :3)
+        """, (student_id, course_id, lookback_days), fetch=True)
+        if not data:
+            return 0.0
+        s, cnt = data[0]
+        if cnt == 0:
+            return 0.0
+        return round((s or 0) / cnt * 100, 2)
+
+    @staticmethod
+    def get_course_attendance_for_date(course_id, date_str):
+        return execute_query("""
+            SELECT s.id, s.name,
+                   NVL((SELECT present FROM Attendance a WHERE a.student_id=s.id AND a.course_id=:1 AND TRUNC(a.date_marked)=TO_DATE(:2,'YYYY-MM-DD')), 0) as present
+            FROM Students s
+            JOIN StudentCourses sc ON s.id = sc.student_id
+            WHERE sc.course_id = :1
+            ORDER BY s.name
+        """, (course_id, date_str), fetch=True)
