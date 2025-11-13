@@ -35,3 +35,5 @@ def execute_query(query, params=None, fetch=False):
     cur.close()
     conn.close()
     return data
+
+#changes
