@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Mark Attendance{% endblock %}
+
+{% block content %}
+<!-- Navigation Bar -->
+<nav class="flex justify-between items-center bg-[#0d0d0d] px-6 py-4 border-b border-[#2f2f2f] shadow-md">
+  <h1 class="text-xl font-semibold text-white tracking-wide">
+    📝 Mark Attendance — <span class="text-gray-400">Course {{ course_id }}</span>
+  </h1>
+  <a href="/teacher/dashboard"
+     class="text-sm text-gray-400 hover:text-white transition-colors duration-200">
+     ⬅ Back to Dashboard
+  </a>
+</nav>
+
+<!-- Main Section -->
+<main class="p-8 bg-[#101010] min-h-screen text-gray-200">
+  <form method="POST" action="{{ url_for('teacher_mark_attendance', course_id=course_id) }}"
+        class="max-w-4xl mx-auto bg-[#181818] border border-[#2a2a2a] rounded-2xl p-6 shadow-lg">
+
+    <!-- Date + Save -->
+    <div class="flex flex-wrap items-center gap-4 mb-6">
+      <label class="text-gray-300 font-medium">Date</label>
+      <input type="date" name="date" value="{{ date }}"
+             class="bg-[#222] text-white px-3 py-2 rounded-md border border-[#333] focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all">
+      <button type="submit"
+              class="ml-auto bg-gradient-to-r from-gray-700 to-gray-900 text-white px-6 py-2 rounded-md font-semibold hover:from-gray-600 hover:to-gray-800 transition-all">
+        💾 Save Attendance
+      </button>
+    </div>
+
+    <!-- Student List -->
+    <div class="overflow-x-auto rounded-xl border border-[#2a2a2a] bg-[#121212]">
+      <table class="w-full text-left border-collapse">
+        <thead class="bg-[#1b1b1b] text-gray-400 uppercase text-sm tracking-wider">
+          <tr>
+            <th class="p-3 border-b border-[#222]">Student Name</th>
+            <th class="p-3 border-b border-[#222] text-center">Present</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in students %}
+          <tr class="hover:bg-[#1a1a1a] transition-all border-b border-[#222]">
+            <td class="p-3 text-white font-medium">{{ s[1] }}</td>
+            <td class="p-3 text-center">
+              <input type="checkbox" name="present_{{ s[0] }}"
+                     {% if s[2] == 1 %}checked{% endif %}
+                     class="w-5 h-5 accent-gray-500 cursor-pointer hover:scale-110 transition-transform">
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mark All Present -->
+    <div class="flex justify-end mt-5">
+      <button type="button" id="markAllBtn"
+              class="text-sm text-gray-300 hover:text-white transition-colors border border-[#333] px-4 py-2 rounded-md hover:bg-[#1c1c1c]">
+        ✅ Mark All Present
+      </button>
+    </div>
+  </form>
+</main>
+
+<!-- Script -->
+<script>
+document.getElementById('markAllBtn').addEventListener('click', () => {
+  document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
+});
+</script>
+
+{% endblock %}

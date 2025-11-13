@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, session, jsonify
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from models import Student, Teacher, Admin, OTP, send_email_otp, send_sms_otp, Assignment, Submission,Notification,TeacherNotification
+from models import Student, Teacher, Admin, OTP, send_email_otp, send_sms_otp, Assignment, Submission,Notification,TeacherNotification,AttendanceModel 
 from db import execute_query
 from datetime import datetime
 from flask import send_from_directory, request, redirect, url_for, flash
@@ -309,6 +309,23 @@ def teacher_dashboard():
         WHERE teacher_id = :1
         ORDER BY due_date DESC
     """, (teacher_id,), fetch=True)
+    # ✅ Fetch attendance summary per course for this teacher
+    attendance_summary = []
+    for c in courses:
+        course_id, course_name = c
+        data = execute_query("""
+            SELECT s.name, ROUND(AVG(a.present)*100,2) AS percentage
+            FROM Attendance a
+            JOIN Students s ON a.student_id = s.id
+            WHERE a.course_id = :1
+            GROUP BY s.name
+            ORDER BY s.name
+        """, (course_id,), fetch=True)
+    attendance_summary.append({
+        'course_id': course_id,
+        'course_name': course_name,
+        'records': [{'name': r[0], 'percent': float(r[1] or 0)} for r in data]
+    })
 
     # ✅ Fetch teacher posts (if any)
     posts = execute_query("""
@@ -325,6 +342,18 @@ def teacher_dashboard():
         WHERE teacher_id = :1
         ORDER BY created_at DESC
     """, (teacher_id,), fetch=True)
+    # in teacher_dashboard route
+# in teacher_dashboard route
+    at_risk = execute_query("""
+        SELECT sr.student_id, sr.risk_score, sr.risk_label, s.name
+        FROM StudentRisk sr JOIN Students s ON sr.student_id = s.id
+        WHERE sr.evaluated_at >= (SYSTIMESTAMP - 1) -- recent: depends on Oracle interval
+        ORDER BY sr.risk_score DESC
+        """, fetch=True)
+
+    at_risk_list = [{'id': r[0], 'risk_score': float(r[1]), 'risk_label': r[2], 'name': r[3]} for r in at_risk]
+
+
 
     # ✅ Render everything to teacher dashboard
     return render_template(
@@ -334,9 +363,12 @@ def teacher_dashboard():
         courses=courses,
         assignments=assignments,
         posts=posts,
-        notifications=notifications
-    )
+        notifications=notifications,
+        at_risk_list=at_risk_list,
+        attendance_summary=attendance_summary  
 
+    )
+    
 
 @app.route('/teacher/login', methods=['POST'])
 def teacher_login():
@@ -492,11 +524,50 @@ def grade_submission():
             WHERE student_id = :1 AND course_id = :2
         """, (student_id, course_id))
 
-    return redirect(request.referrer or '/teacher/dashboard')
+    return redirect(request.referrer or '/teacher/dashboard') # + others
 
-print("✅ Registered routes:")
-for rule in app.url_map.iter_rules():
-    print(rule)
+# Teacher: show attendance marking UI for a course and date
+@app.route('/teacher/attendance/<int:course_id>', methods=['GET'])
+def teacher_attendance_view(course_id):
+    if 'teacher_id' not in session:
+        return redirect('/')
+    # fetch teacher->course check is recommended
+    date_str = request.args.get('date') or datetime.today().strftime('%Y-%m-%d')
+    students = AttendanceModel.get_course_attendance_for_date(course_id, date_str)
+    # students rows: (id, name, present)
+    return render_template('teacher_mark_attendance.html', course_id=course_id, date=date_str, students=students)
+
+# Teacher: post attendance
+@app.route('/teacher/attendance/<int:course_id>', methods=['POST'])
+def teacher_mark_attendance(course_id):
+    if 'teacher_id' not in session:
+        return redirect('/')
+    date_str = request.form.get('date') or datetime.today().strftime('%Y-%m-%d')
+    # form will have inputs like present_<student_id> = 'on' if checked
+    attendance_list = []
+    for key, val in request.form.items():
+        if key.startswith('present_'):
+            sid = int(key.split('_',1)[1])
+            present = 1
+            attendance_list.append({'student_id': sid, 'present': present})
+    AttendanceModel.mark_attendance_bulk(course_id, date_str, attendance_list)
+    flash("✅ Attendance saved", "success")
+    return redirect(url_for('teacher_attendance_view', course_id=course_id, date=date_str))
+
+# Admin or scheduled job: run ML predictions for all students
+@app.route('/ml/run_predictions', methods=['POST'])
+def run_ml_predictions():
+    # security: protect this in prod
+    from ml_model import predict_all_students  # see model code below
+    threshold = float(request.form.get('notify_threshold', 0.6))
+    results = predict_all_students(threshold=threshold)
+    # results: list of dicts {'student_id', 'risk_score', 'risk_label'}
+    for r in results:
+        if r['risk_label'] in ('high','medium'):
+            Notification.create(r['student_id'], f"⚠️ Risk alert: Your current risk is {r['risk_label']} ({r['risk_score']:.2f}). Please consult your teacher.")
+            # optionally notify family contact from Students table (if stored)
+    return jsonify({"count": len(results)})
+
 
 
 # ---------------- MAIN ----------------
