@@ -1,10 +1,10 @@
-# models.py (fixed for Postgres)
+# models.py (Postgres-ready, notification-integrated)
 import os
 import random
 import smtplib
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
-from twilio.rest import Client  # optional: prints dev-mode if creds missing
+from twilio.rest import Client
 from datetime import datetime, timedelta
 
 from db import execute_query
@@ -22,6 +22,7 @@ def send_email(to_address, subject, body):
     msg["To"] = to_address
 
     if not sender or not app_password:
+        # Dev mode: print instead of sending
         print(f"📧 [DEV MODE] send_email to {to_address} | Subject: {subject} | Body: {body}")
         return
 
@@ -45,11 +46,8 @@ def send_sms(to_phone, message):
 
     try:
         client = Client(sid, token)
-        client.messages.create(
-            body=message,
-            from_=from_number,
-            to=f"+91{to_phone}" if not to_phone.startswith("+") else to_phone,
-        )
+        to_num = to_phone if to_phone.startswith("+") else f"+91{to_phone}"
+        client.messages.create(body=message, from_=from_number, to=to_num)
         print(f"✅ SMS sent to: {to_phone}")
     except Exception as e:
         print(f"❌ SMS send error: {e}")
@@ -152,6 +150,16 @@ class TeacherNotification:
         new_id = execute_query(q, (teacher_id, message), returning=True)
         return new_id
 
+    @staticmethod
+    def get_for_teacher(teacher_id):
+        q = """
+        SELECT message, to_char(created_at,'YYYY-MM-DD HH24:MI')
+        FROM TeacherNotifications
+        WHERE teacher_id=%s
+        ORDER BY created_at DESC
+        """
+        return execute_query(q, (teacher_id,), fetch=True)
+
 # ---------------- NOTIFICATIONS MODEL ----------------
 class Notification:
     @staticmethod
@@ -198,18 +206,27 @@ class Teacher:
 
     @staticmethod
     def grade_submission(submission_id, marks):
+        """
+        Update a submission's marks, recompute student's course average,
+        and notify the student.
+        """
+        # update marks
         execute_query("UPDATE Submissions SET marks=%s WHERE id=%s", (marks, submission_id))
+
+        # find student and course
         data = execute_query("""
             SELECT s.student_id, a.course_id
             FROM Submissions s
-            JOIN Assignments a ON s.assignment_id=a.id
+            JOIN Assignments a ON s.assignment_id = a.id
             WHERE s.id=%s
         """, (submission_id,), fetch=True)
+
         if not data:
             print("❌ No related student/course found.")
             return
 
         student_id, course_id = data[0]
+
         # recompute average marks for the student in that course
         execute_query("""
             UPDATE StudentCourses
@@ -221,6 +238,8 @@ class Teacher:
             )
             WHERE student_id=%s AND course_id=%s
         """, (student_id, course_id, student_id, course_id))
+
+        # notify student
         Notification.create(student_id, f"✅ Your submission for Course {course_id} has been graded. Marks: {marks}")
 
     @staticmethod
@@ -228,6 +247,8 @@ class Teacher:
         q = "INSERT INTO TeacherCourses (teacher_id, course_id) VALUES (%s, %s) RETURNING id"
         new_id = execute_query(q, (teacher_id, course_id), returning=True)
         return new_id
+
+# ---------------- TEACHER POSTS ----------------
 class TeacherPost:
     @staticmethod
     def create(teacher_id, message):
@@ -240,13 +261,13 @@ class TeacherPost:
 
         # ALSO notify all students of this teacher
         students = execute_query("""
-            SELECT sc.student_id
+            SELECT DISTINCT sc.student_id
             FROM StudentCourses sc
             JOIN TeacherCourses tc ON sc.course_id = tc.course_id
             WHERE tc.teacher_id = %s
         """, (teacher_id,), fetch=True)
 
-        for (sid,) in students:
+        for (sid,) in students or []:
             Notification.create(sid, f"📢 Announcement from your teacher: {message}")
 
         return post_id
@@ -259,10 +280,6 @@ class TeacherPost:
             WHERE teacher_id = %s
             ORDER BY created_at DESC
         """, (teacher_id,), fetch=True)
-
-
-
-
 
 # ---------------- ADMIN MODEL ----------------
 class Admin:
@@ -328,8 +345,17 @@ class Submission:
         VALUES (%s, %s, %s, NOW()) RETURNING id
         """
         new_id = execute_query(q, (assignment_id, student_id, file_path), returning=True)
+
+        # notify student (confirmation)
         Notification.create(student_id, f"📤 Assignment {assignment_id} submitted successfully.")
         print(f"✅ Submission {new_id} saved for Student {student_id}")
+
+        # notify teacher that a student submitted
+        teacher_row = execute_query("SELECT teacher_id FROM Assignments WHERE id=%s", (assignment_id,), fetch=True)
+        if teacher_row:
+            teacher_id = teacher_row[0][0]
+            TeacherNotification.create(teacher_id, f"📥 Student {student_id} submitted Assignment {assignment_id}")
+
         return new_id
 
     @staticmethod
@@ -358,10 +384,7 @@ class AttendanceModel:
                 (sid, course_id, date_str), fetch=True
             )
             if exists:
-                execute_query(
-                    "UPDATE Attendance SET present=%s, created_at=NOW() WHERE id=%s",
-                    (present, exists[0][0])
-                )
+                execute_query("UPDATE Attendance SET present=%s, created_at=NOW() WHERE id=%s", (present, exists[0][0]))
             else:
                 execute_query(
                     "INSERT INTO Attendance (student_id, course_id, date_marked, present, created_at) VALUES (%s,%s,%s,%s,NOW())",
@@ -370,7 +393,6 @@ class AttendanceModel:
 
     @staticmethod
     def get_attendance_percentage(student_id, course_id, lookback_days=180):
-        # compute cutoff date in Python to avoid interval param issues
         cutoff = (datetime.now() - timedelta(days=int(lookback_days))).date()
         q = """
         SELECT COALESCE(SUM(present),0), COUNT(*)
