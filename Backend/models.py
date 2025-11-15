@@ -74,7 +74,15 @@ class Student:
         new_id = execute_query(q, (name, email, phone, password), returning=True)
         print(f"✅ Student registered with ID: {new_id}")
         return new_id
-
+    @staticmethod
+    def enroll(student_id, course_id):
+        execute_query("INSERT INTO StudentCourses (student_id, course_id) VALUES (%s, %s)", (student_id, course_id))
+        # optional: count courses and warn teacher if less than 6
+        rows = execute_query("SELECT COUNT(*) FROM StudentCourses WHERE student_id=%s", (student_id,), fetch=True)
+        cnt = rows[0][0] if rows else 0
+        if cnt < 6:
+            # create a notification for student telling them to enroll in more courses
+            Notification.create(student_id, f"⚠️ You are currently enrolled in {cnt} subjects. Please enroll in {6-cnt} more subjects for accurate performance tracking.") 
     @staticmethod
     def login(student_id, password):
         q = "SELECT id, name FROM Students WHERE id=%s AND password=%s"
@@ -372,22 +380,27 @@ class Submission:
 class AttendanceModel:
     @staticmethod
     def mark_attendance_bulk(course_id, date_str, attendance_list):
-        """
-        attendance_list: list of dicts {'student_id': id, 'present': True/False}
-        date_str: 'YYYY-MM-DD' or a date object; here we expect string for simplicity
-        """
         for rec in attendance_list:
             sid = rec['student_id']
             present = 1 if rec.get('present') else 0
+
+            # Was this date already marked?
             exists = execute_query(
                 "SELECT id FROM Attendance WHERE student_id=%s AND course_id=%s AND DATE(date_marked)=%s",
                 (sid, course_id, date_str), fetch=True
             )
+
             if exists:
-                execute_query("UPDATE Attendance SET present=%s, created_at=NOW() WHERE id=%s", (present, exists[0][0]))
-            else:
+                # Update only if needed
                 execute_query(
-                    "INSERT INTO Attendance (student_id, course_id, date_marked, present, created_at) VALUES (%s,%s,%s,%s,NOW())",
+                    "UPDATE Attendance SET present=%s, created_at=NOW() WHERE id=%s",
+                    (present, exists[0][0])
+                )
+            else:
+                # New entry
+                execute_query(
+                    "INSERT INTO Attendance (student_id, course_id, date_marked, present, created_at) "
+                    "VALUES (%s,%s,%s,%s,NOW())",
                     (sid, course_id, date_str, present)
                 )
 
@@ -410,11 +423,32 @@ class AttendanceModel:
     @staticmethod
     def get_course_attendance_for_date(course_id, date_str):
         q = """
-        SELECT s.id, s.name,
-               COALESCE((SELECT present FROM Attendance a WHERE a.student_id=s.id AND a.course_id=%s AND DATE(a.date_marked)=%s LIMIT 1), 0) as present
+        SELECT 
+            s.id, 
+            s.name,
+            COALESCE((
+                SELECT present 
+                FROM Attendance a 
+                WHERE a.student_id = s.id 
+                  AND a.course_id = %s 
+                  AND DATE(a.date_marked) = %s 
+                LIMIT 1
+            ), 0) AS present,
+            (
+                SELECT id 
+                FROM Attendance a 
+                WHERE a.student_id = s.id 
+                  AND a.course_id = %s 
+                  AND DATE(a.date_marked) = %s 
+                LIMIT 1
+            ) AS record_exists
         FROM Students s
         JOIN StudentCourses sc ON s.id = sc.student_id
         WHERE sc.course_id = %s
         ORDER BY s.name
         """
-        return execute_query(q, (course_id, date_str, course_id), fetch=True)
+        return execute_query(
+            q, 
+            (course_id, date_str, course_id, date_str, course_id), 
+            fetch=True
+        )
