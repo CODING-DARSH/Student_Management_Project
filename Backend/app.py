@@ -2,6 +2,7 @@
 from flask import Flask, render_template, request, redirect, session, jsonify, send_from_directory, url_for, flash
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from ml_model import predict_all_students
 
 from models import (
     Student,
@@ -232,7 +233,8 @@ def teacher_register():
         return f"Registered! Your Teacher ID is {teacher_id}. <a href='/'>Login</a>"
     return render_template('teacher_register.html')
 
-# ---------------- TEACHER DASHBOARD ----------------
+ # <-- ADD THIS AT TOP OF FILE
+
 @app.route('/teacher/dashboard')
 def teacher_dashboard():
     if 'teacher_id' not in session:
@@ -240,7 +242,10 @@ def teacher_dashboard():
 
     tid = session['teacher_id']
 
-    teacher = execute_query("SELECT id, name FROM Teachers WHERE id=%s", (tid,), fetch=True)
+    teacher = execute_query(
+        "SELECT id, name FROM Teachers WHERE id=%s",
+        (tid,), fetch=True
+    )
     teacher = teacher[0] if teacher else None
 
     students = execute_query("""
@@ -263,10 +268,11 @@ def teacher_dashboard():
 
     posts = TeacherPost.get_for_teacher(tid)
 
+    # ---------------------- ATTENDANCE SUMMARY ----------------------
     attendance_summary = []
     for cid, cname in courses or []:
         data = execute_query("""
-            SELECT s.name, ROUND(AVG(a.present)*100,2)
+            SELECT s.name, ROUND(AVG(a.present)*100, 2)
             FROM Attendance a
             JOIN Students s ON a.student_id = s.id
             WHERE a.course_id = %s
@@ -277,19 +283,39 @@ def teacher_dashboard():
         attendance_summary.append({
             'course_id': cid,
             'course_name': cname,
-            'records': [{'name': r[0], 'percent': float(r[1] or 0)} for r in data or []]
+            'records': [
+                {'name': r[0], 'percent': float(r[1] or 0)}
+                for r in data or []
+            ]
         })
 
     notifications = TeacherNotification.get_for_teacher(tid)
 
-    return render_template('teacher_dashboard.html',
-                           teacher=teacher,
-                           students=students,
-                           courses=courses,
-                           assignments=assignments,
-                           posts=posts,
-                           notifications=notifications,
-                           attendance_summary=attendance_summary)
+    # ------------------------- ML PREDICTION SECTION -------------------------
+    try:
+        ml_predictions = predict_all_students(threshold=0.6, notify=False)
+        at_risk_list = [
+            p for p in ml_predictions
+            if p["risk_label"] in ("high", "medium")
+        ]
+    except Exception as e:
+        print("ML ERROR:", e)
+        at_risk_list = []
+    # -------------------------------------------------------------------------
+
+    return render_template(
+        'teacher_dashboard.html',
+        teacher=teacher,
+        students=students,
+        courses=courses,
+        assignments=assignments,
+        posts=posts,
+        notifications=notifications,
+        attendance_summary=attendance_summary,
+        at_risk_list=at_risk_list      # <-- SEND TO FRONTEND
+    )
+
+
 
 # ---------------- CREATE ASSIGNMENT ----------------
 @app.route('/teacher/create_assignment', methods=['POST'])
