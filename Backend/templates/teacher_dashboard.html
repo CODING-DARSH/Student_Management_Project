@@ -383,46 +383,34 @@
         {% endif %}
       </section>
     </div>
+    <section class="glass p-6 rounded-2xl mt-6">
+  <h2 class="text-xl font-bold mb-4 text-white">
+    🚨 At-Risk Students
+  </h2>
 
-    <!-- Right Column - 1/3 width -->
-    <div class="space-y-8">
-      <!-- At-Risk Students -->
-      <section class="glass p-6 rounded-2xl hover-lift animate-fade-in-up stagger-1">
-        <h2 class="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-          <i class="fa-solid fa-exclamation-triangle text-red-400"></i>
-          At-Risk Students
-        </h2>
-
-        {% if at_risk_list %}
-        <div class="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
-          {% for student in at_risk_list %}
-          <div class="glass-card p-3 rounded-xl hover-lift">
-            <div class="flex items-center justify-between mb-2">
-              <div>
-                <h4 class="font-semibold text-white text-sm">{{ student.name }}</h4>
-                <p class="text-gray-400 text-xs">ID: {{ student.id }}</p>
-              </div>
-              <span class="text-xs px-2 py-1 rounded-full 
-                {% if student.risk_label == 'high' %}status-high
-                {% elif student.risk_label == 'medium' %}status-medium
-                {% else %}status-low{% endif %}">
-                {{ student.risk_label|upper }}
-              </span>
-            </div>
-            <div class="flex justify-between text-xs text-gray-400">
-              <span>Risk Score: {{ student.risk_score|round(2) }}</span>
-            </div>
-          </div>
-          {% endfor %}
+  {% if at_risk_list %}
+    <div class="space-y-2">
+      {% for s in at_risk_list %}
+      <div class="p-3 bg-[#1a1a1a] rounded-lg flex justify-between">
+        <div>
+          <p class="text-white font-semibold">Student ID: {{ s.student_id }}</p>
+          <p class="text-gray-400 text-sm">Risk Score: {{ s.risk_score|round(2) }}</p>
         </div>
-        {% else %}
-        <div class="text-center py-4">
-          <i class="fa-solid fa-check-circle text-3xl text-green-400 mb-2"></i>
-          <p class="text-gray-500 text-sm">No at-risk students detected</p>
-        </div>
-        {% endif %}
-      </section>
-
+        <span class="
+          {% if s.risk_label=='high' %}text-red-400{% 
+             elif s.risk_label=='medium' %}text-yellow-400{% 
+             else %}text-green-400{% endif %}
+          font-bold text-sm
+        ">
+          {{ s.risk_label|upper }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-gray-400">No at-risk students.</p>
+  {% endif %}
+</section>
       <!-- Announcements -->
       <section class="glass p-6 rounded-2xl hover-lift animate-fade-in-up stagger-2">
         <div class="flex items-center justify-between mb-6">
